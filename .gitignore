@@ -1,0 +1,6 @@
+# .gitignore
+.env
+
+# k8s Secret 실제 값 파일은 커밋 금지 (example만 커밋)
+Node-Kubernetes/secrets/*.yaml
+!Node-Kubernetes/secrets/*.example.yaml
