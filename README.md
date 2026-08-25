@@ -6,7 +6,7 @@
 
 - **기간** : 2024. 09. 30 ~ 2024. 11. 01 (사전 셋업 2024. 09. 27 ~ 09. 30)
 - **인원** : 5명 (박종찬, 손채린, 윤현석, 정소은, 최건우)
-- **스택** : `AWS` `GCP(GKE)` `OpenShift` `Kubernetes` `Istio` `ArgoCD` `GitHub Actions` `Prometheus` `Grafana` `ELK Stack` `KEDA` `Nexus` `Python(Boto3)` `Slack API` `Node.js`
+- **스택** : `AWS` `GCP(GKE)` `OpenShift` `Kubernetes` `Istio` `ArgoCD` `GitHub Actions` `Prometheus` `ELK Stack` `KEDA` `Nexus` `Python(Boto3)` `Slack API` `Node.js`
 
 ---
 
@@ -19,31 +19,28 @@
 - 따라서 이 저장소에 담긴 것은 **Kubernetes 매니페스트, HPA/PromQL 룰, CI/CD 파이프라인,
   운영 자동화 스크립트**이며, 앱 코드는 배포 대상으로서 함께 보관되어 있을 뿐입니다.
 - **실제 작업의 대부분은 커밋으로 남지 않습니다.** OpenShift 콘솔, AWS 콘솔,
-  Site-to-Site VPN 설정, ArgoCD·Kibana·Grafana UI, 그리고 클러스터 안에서 직접 수행한 작업이
+  Site-to-Site VPN 설정, ArgoCD·Kibana UI, 그리고 클러스터 안에서 직접 수행한 작업이
   결과물의 중심이기 때문입니다. **커밋 수로 작업량을 판단할 수 없는 저장소**입니다.
-  (히스토리는 자격증명 노출을 정리하기 위해 2026년에 한 번 리셋되었습니다. [11장](#11-보안-관련-안내))
+  (히스토리는 자격증명 노출을 정리하기 위해 2026년에 한 번 리셋되었습니다. [12장](#12-보안-관련-안내))
 
 ---
 
 ## 1. 담당 역할
 
+발표자료 2page 기준입니다.
+
 | 이름 | 역할 | 담당 영역 |
 |:-----|:-----|:----------|
-| **윤현석** | **PL** | **ELK 로그 파이프라인 구축 · OpenShift 클러스터 구축 · Site-to-Site VPN** |
-| 박종찬 | <!-- TODO --> | <!-- TODO --> |
-| 손채린 | <!-- TODO --> | <!-- TODO --> |
-| 정소은 | <!-- TODO --> | <!-- TODO --> |
-| 최건우 | <!-- TODO --> | <!-- TODO --> |
+| **윤현석** | **PL** | **ELK · OpenShift 구축** |
+| 박종찬 | PM | CI/CD · Service Mesh · Migration · Slack BOT |
+| 손채린 | — | VPN · GKE 구축 · AWS k8s(보조) |
+| 정소은 | — | AWS k8s(kOps) 구축 · Auto Scaling · Load Testing |
+| 최건우 | — | Rust Tool · CI/CD(보조) · ELK(보조) |
 
-<!--
-TODO: 나머지 4명의 역할(PM / CI/CD / Monitoring / Infra)을 이름과 1:1로 확정해서 채울 것.
-      이전 README는 "박종찬, 손채린, 윤현석, 정소은, 최건우 — PM / PL / CI/CD / Monitoring / Infra"
-      처럼 이름과 역할을 나란히 나열해 윤현석=CI/CD 로 오독되게 되어 있었음.
-      발표자료 기준으로 윤현석은 PL(ELK / OpenShift / VPN)이 맞음.
--->
-
-이 README는 **PL(윤현석) 관점**에서 작성되었으며,
-본인 담당 영역인 [ELK 로그 파이프라인](#6-관찰성--elk-로그-파이프라인)을 가장 자세히 다룹니다.
+이 README는 팀 전체 산출물을 정리한 것이고, 서술은 **PL(윤현석) 관점**입니다.
+본인 담당은 **[ELK 로그 파이프라인](#6-관찰성--elk-로그-파이프라인)과
+[OpenShift 클러스터 구축](#7-openshift--온프레미스-클러스터)** 두 가지이며, 이 두 장을 가장 자세히 다룹니다.
+나머지 장은 팀원 담당 영역이므로 각 장 머리에 담당자를 표기했습니다.
 
 ---
 
@@ -74,8 +71,8 @@ TODO: 나머지 4명의 역할(PM / CI/CD / Monitoring / Infra)을 이름과 1:1
         │  Istio Gateway / VS    │      │                        │
         │  frontend / backend    │      │  frontend / backend    │
         │  HPA v2 (1~5) + KEDA   │      │                        │
-        │  Cluster Autoscaler    │      │  (Cloud SQL → RDS 이관)│
-        │  RDS(MySQL) · S3       │      │                        │
+        │  Cluster Autoscaler    │      │  Cloud SQL (RDS에서 이관)│
+        │  RDS(MySQL)            │      │                        │
         └───────────┬────────────┘      └────────────────────────┘
                     │ Site-to-Site VPN
                     ▼
@@ -85,7 +82,7 @@ TODO: 나머지 4명의 역할(PM / CI/CD / Monitoring / Infra)을 이름과 1:1
         │  Redis (Session Store)                     │
         └────────────────────────────────────────────┘
 
-  관찰성 : kube-prometheus-stack + Grafana
+  관찰성 : kube-prometheus-stack (Prometheus)
            ELK (Filebeat/Metricbeat → Logstash → Elasticsearch → Kibana)
   운영   : ArgoCD (GitOps)  ·  Slack ChatOps (Python/Boto3)
 ```
@@ -100,15 +97,17 @@ TODO: 나머지 4명의 역할(PM / CI/CD / Monitoring / Infra)을 이름과 1:1
 하이브리드만으로는 **AWS 리전 단위 장애**에 대응할 수 없습니다.
 GKE에 동일한 워크로드를 올리고 **Route 53으로 GKE ↔ AWS 트래픽을 분산**해
 한쪽이 죽어도 서비스가 유지되는 구성을 만들었습니다.
-데이터 계층은 **Cloud SQL → RDS로 마이그레이션**해 한쪽으로 통일했고,
-이미지 등 정적 자산은 **S3**로 분리했습니다.
+데이터 계층은 **AWS RDS(MySQL) → GCP Cloud SQL(MySQL)** 로 **지속적 마이그레이션**을 걸어
+양쪽이 같은 데이터를 보게 했습니다. (발표자료 기준: 소스 RDS, 대상 Cloud SQL)
 
 ---
 
 ## 4. CI/CD — GitHub Actions + ArgoCD
 
+> 담당: 박종찬(PM) · 최건우(보조)
+
 파이프라인 전체가 [`ci-cd/docker-action.yml`](ci-cd/docker-action.yml) 에 정의되어 있습니다.
-(원래 위치는 `Rust-Tool/.github/workflows/` 였으며, 아래 8장의 이유로 해당 디렉터리를 정리하면서 옮겼습니다.)
+(원래 위치는 `Rust-Tool/.github/workflows/` 였으며, 아래 9장의 이유로 해당 디렉터리를 정리하면서 옮겼습니다.)
 
 **CI (self-hosted runner)**
 
@@ -132,7 +131,9 @@ self-hosted runner에 잔여물이 쌓이지 않게 했습니다.
 
 ---
 
-## 5. 커스텀 메트릭 오토스케일링 (PromQL + HPA v2)
+## 5. 커스텀 메트릭 오토스케일링 (PromQL + HPA v2 + KEDA)
+
+> 담당: 정소은 (Auto Scaling) · Istio 연동은 박종찬(Service Mesh)
 
 CPU 사용률은 후행 지표라서, 트래픽이 급증하면 CPU가 오르기 전에 이미 응답 지연이 발생합니다.
 이벤트성 트래픽에 선제 대응하기 위해 **PromQL 레코딩 룰을 직접 작성**하고
@@ -209,20 +210,46 @@ sum(rate(container_network_receive_bytes_total{namespace="bank-namespace", pod=~
 컨테이너 기본 요청량 600Mi 대비 **90% 지점**으로, OOM 이전에 스케일아웃이 걸리도록 잡은 값입니다.
 프론트엔드 네트워크 임계값을 백엔드의 2배로 둔 것은 정적 자산 전송량 차이를 반영한 것입니다.
 
-### 5-4. 파드 위 계층 — KEDA · Cluster Autoscaler
+### 5-4. KEDA — 같은 5개 지표를 ScaledObject로
 
-- **KEDA** : 이벤트 기반 스케일링을 담당해 HPA만으로 다루기 어려운 워크로드를 보완
-- **Cluster Autoscaler** : 파드가 늘어 노드 자원이 부족해지면 **노드 자체를 확장**
-  (HPA만 있으면 `Pending` 파드가 쌓인 채 멈춥니다)
+발표자료(29~36page) 기준으로 최종 운영은 **KEDA**로 옮겨갔습니다.
+KEDA는 내부적으로 HPA를 생성해 동작하므로, 위 5개 지표를 그대로 쓰면서
+**0개까지 축소**와 외부 이벤트 소스 연동이 가능해집니다.
 
-<!--
-TODO: KEDA ScaledObject의 트리거 종류·임계값, Cluster Autoscaler 노드 그룹 min/max를 확인해서 채울 것.
-      두 리소스 모두 클러스터/콘솔에서 직접 구성해 이 저장소에 매니페스트가 없음.
--->
+| | HPA | KEDA |
+|:--|:--|:--|
+| 스케일 범위 | 1 ~ N | **0 ~ N** |
+| 입력 | CPU·메모리(기본) | 외부 이벤트·메트릭 |
+| 동작 | 자체 | **HPA를 생성해 위임** |
+
+`frontend-scaledobject.yaml` 에서 **CPU · 메모리 · RPS · 응답 시간 · 네트워크 송수신**
+5개 기준으로 파드 수를 조절했고, 메트릭 소스는 `keda_scaler_metrics_value` 와
+`istio_requests_total` 두 갈래였습니다.
+
+Prometheus가 KEDA를 수집하도록 `keda-monitoring.yaml`(ServiceMonitor),
+`prometheus-keda-rbac.yaml`(권한), `keda-network-policy.yaml`(네트워크 정책)을 구성했습니다.
+Istio 쪽 대응 파일 두 개는 이 저장소에 있습니다 —
+[`istio-monitoring.yaml`](Node-Kubernetes/horizontal-pod-autoscalers/istio-monitoring.yaml),
+[`prometheus-istio-rbac.yaml`](Node-Kubernetes/horizontal-pod-autoscalers/prometheus-istio-rbac.yaml).
+
+> **저장소에 있는 것은 HPA v2 매니페스트이고, KEDA ScaledObject는 없습니다.**
+> 같은 5개 지표를 KEDA로 옮겨 운영한 것으로 보이지만, 그 전환 시점과
+> ScaledObject 실물은 이 저장소로 확인되지 않습니다. 발표자료에만 남아 있습니다.
+
+### 5-5. Cluster Autoscaler — 노드 단위 확장
+
+HPA·KEDA는 파드를 늘릴 뿐이라, 노드 자원이 모자라면 파드가 `Pending` 으로 쌓인 채 멈춥니다.
+그 위 계층을 **Cluster Autoscaler**가 담당했습니다. (발표자료 27~28page)
+
+- **kOps addon**으로 설치
+- ASG(Auto Scaling Group) 설정 후, CA가 인식할 수 있도록 **해당 ASG에 태그 추가**
+- CA를 붙일 **노드 그룹 IAM 역할에 Autoscaling 관련 권한 추가**
 
 ---
 
 ## 6. 관찰성 — ELK 로그 파이프라인
+
+> 담당: **윤현석(PL)** · 최건우(보조)
 
 > **본인(PL, 윤현석) 담당 영역이자 1인 1주제 발표 주제입니다.**
 
@@ -333,27 +360,65 @@ Filebeat는 `decode_json_fields` 로 `message` 안의 JSON을 꺼내려 하는�
 그런데 파이프라인 필터는 `[parsed][log][level]` 을 참조합니다 — `target: "parsed"` 를 가정한 경로입니다.
 저장소 전체에서 `parsed` 라는 필드를 만드는 곳은 **어디에도 없습니다.**
 
-결과적으로 filebeat 이벤트는 전부 `else` 분기로 떨어져
-`log_severity` 는 항상 `"low"` 로만 기록됐을 것입니다.
+결과적으로 이 `log_severity` 필드는 항상 `"low"` 로만 기록됐을 것입니다.
 
-당시에는 인지하지 못했고, 2년 뒤 저장소를 정리하며 파일을 대조하다 발견했습니다.
-**그래서 이 README에는 "필드 매핑 문제를 해결했다"고 적지 않습니다.**
-의도한 설계와 실제 동작이 어긋난 채로 끝난 부분입니다.
+**다만 레벨별 집계 자체는 동작했습니다.** 발표자료 41~42page는 필터링 기준을
+`log_severity` 가 아니라 **`log.level`** 로 적고 있고, Kibana 대시보드에도
+"로그 레벨별 개수" 패널이 있습니다. `log.level` 은 `target: ""` 이 만들어내는 바로 그 경로이므로,
+**대시보드는 `log.level` 을 직접 조회했고 `log_severity` 는 쓰이지 않은 잉여 필드**였던 것으로 보입니다.
 
-> 고치려면 Filebeat 쪽을 `target: "parsed"` 로 바꾸거나 필터를 `[log][level]` 로 맞추고,
-> 그 전에 **앱이 구조화 로그를 출력하도록** 만드는 것이 먼저입니다.
-> 평문 로그에 파싱 파이프라인을 붙인 것 자체가 순서가 뒤바뀐 설계였습니다.
+정리하면 — 레벨별 시각화라는 목표는 달성했지만,
+그 목표를 위해 파이프라인에 넣은 `log_severity` 매핑은 경로가 어긋나 무의미했습니다.
+당시에는 인지하지 못했고, 2년 뒤 저장소를 정리하며 발견했습니다.
+
+> 그리고 더 근본적으로, 레벨을 가진 로그는 JSON을 찍는 인프라 컨테이너들의 것이지
+> **정작 배포 대상인 금융 앱의 로그가 아니었습니다.** 앱이 구조화 로거를 쓰게 만드는 것이
+> 파싱 파이프라인을 붙이는 것보다 먼저였습니다.
+
+<!-- TODO(본인 확인): Kibana "로그 레벨별 개수" 패널이 앱 로그 기준이었는지 전체 컨테이너 기준이었는지.
+     전자라면 위 서술을 수정해야 함(앱은 평문 로그라 레벨이 없음). -->
+
 
 ### 6-7. 메트릭 관찰성
 
-로그(ELK)와 별개로 **kube-prometheus-stack + Grafana**로 메트릭 관찰성을 구성했습니다.
-Prometheus는 오토스케일링의 데이터 소스([5장](#5-커스텀-메트릭-오토스케일링-promql--hpa-v2))를 겸합니다.
+로그(ELK)와 별개로 **kube-prometheus-stack**으로 메트릭을 수집했습니다.
+Prometheus는 오토스케일링의 데이터 소스([5장](#5-커스텀-메트릭-오토스케일링-promql--hpa-v2--keda))를 겸합니다.
 
-<!-- TODO: Grafana 대시보드 구성(어떤 패널을 상시로 봤는지)과 알림 규칙 유무를 확인해서 채울 것. -->
+로그 쪽 시각화는 Kibana 대시보드로 구성했습니다. (발표자료 42page)
+
+- 로그 레벨별 개수
+- 메모리 총합 대비 현재 사용량
+- 네트워크 in / out
 
 ---
 
-## 7. ChatOps — Slack 기반 인프라 운영 (Python/Boto3)
+## 7. OpenShift — 온프레미스 클러스터
+
+> 담당: **윤현석(PL)**
+
+하이브리드의 온프레미스 쪽을 OpenShift로 구성했습니다. (발표자료 44~48page)
+
+- 클러스터 설치·초기 설정 후 **API·애플리케이션 접속용 도메인을 DNS로 구성**
+- 앱 배포는 GitHub 저장소의 매니페스트를 그대로 `apply`
+- 서비스·네트워크·파드 정상 동작까지 확인
+
+### AWS와의 연동
+
+온프레미스 클러스터를 AWS 트래픽 경로에 편입시키는 것이 핵심이었습니다.
+
+- **AWS Target Group에 OpenShift 클러스터 IP를 등록**
+- 그 TG를 **ALB**에 연결해 외부 트래픽을 온프레미스로 흘림
+- 설정한 DNS 주소로 애플리케이션 접근이 되는지 검증
+
+즉 온프레미스 클러스터가 별도 섬으로 남지 않고,
+**AWS 로드밸런서 뒤의 백엔드 중 하나로 편입**되는 구조입니다.
+AWS ↔ 온프레미스 구간 자체는 Site-to-Site VPN으로 연결했습니다. (담당: 손채린)
+
+---
+
+## 8. ChatOps — Slack 기반 인프라 운영 (Python/Boto3)
+
+> 담당: 박종찬(PM)
 
 AWS 콘솔에 접속하지 않고 Slack에서 인프라를 제어하는 챗봇입니다. ([`Python-SlackBot/`](Python-SlackBot))
 
@@ -368,7 +433,7 @@ AWS 콘솔에 접속하지 않고 Slack에서 인프라를 제어하는 챗봇�
 
 ---
 
-## 8. 디렉토리 구조
+## 9. 디렉토리 구조
 
 ```
 ├── Node-Frontend/        # [배포 대상] Node.js(Express) + EJS 프론트엔드
@@ -392,7 +457,7 @@ AWS 콘솔에 접속하지 않고 Slack에서 인프라를 제어하는 챗봇�
 
 ---
 
-## 9. 로컬에서 매니페스트 확인하기
+## 10. 로컬에서 매니페스트 확인하기
 
 ```bash
 kubectl kustomize Node-Kubernetes/
@@ -412,7 +477,7 @@ kubectl apply -f Node-Kubernetes/secrets/bank-backend-secret.yaml
 
 ---
 
-## 10. 알려진 한계
+## 11. 알려진 한계
 
 정직하게 남겨둡니다.
 
@@ -421,14 +486,15 @@ kubectl apply -f Node-Kubernetes/secrets/bank-backend-secret.yaml
 - `deployments/kustomization.yaml` 이 참조하는 `frontend-deployment.yaml` 과
   `secrets/` 하위 kustomization이 저장소에 없어 `kubectl kustomize` 가 그대로는 실행되지 않습니다.
   <!-- TODO: frontend-deployment.yaml 원본이 남아 있으면 복구할 것. -->
-- 6-6에 적은 대로 **로그 레벨 매핑(`log_severity`)은 실제로 동작하지 않았습니다.**
-  앱이 평문 로그를 찍는데 JSON 파싱 파이프라인을 붙였고, 필드 경로도 어긋나 있었습니다.
+- 6-6에 적은 대로 파이프라인의 **`log_severity` 매핑은 필드 경로가 어긋나 무의미했습니다.**
+  레벨별 시각화는 `log.level` 을 직접 조회해 동작했지만, 정작 배포 대상 앱은 평문 로그를 찍어
+  레벨을 가질 수 없었습니다. 앱의 로깅 형식을 먼저 정하지 않고 파이프라인을 만든 결과입니다.
 - KEDA · Cluster Autoscaler · GKE · Route 53 · ELK 구성은 **콘솔과 클러스터에서 직접 수행**되어
   이 저장소에 매니페스트가 남아 있지 않습니다.
 
 ---
 
-## 11. 보안 관련 안내
+## 12. 보안 관련 안내
 
 초기 커밋에 RDS 엔드포인트와 DB/Redis 자격증명이 평문으로 포함되어 있었습니다.
 현재는 **Kubernetes Secret 참조 방식으로 전환**했고,
