@@ -6,6 +6,7 @@
 
 - **기간** : 2024. 09. 30 ~ 2024. 11. 01 (사전 셋업 2024. 09. 27 ~ 09. 30)
 - **인원** : 5명 (박종찬, 손채린, 윤현석, 정소은, 최건우)
+- **본인 역할** : **PL** — OpenShift 온프레미스 클러스터 · ELK 로그 파이프라인 · AWS ALB 편입 ([§1](#1-담당-역할) · [§6](#6-관찰성--elk-로그-파이프라인) · [§7](#7-openshift--온프레미스-클러스터))
 - **스택** : `AWS` `GCP(GKE)` `OpenShift` `Kubernetes` `Istio` `ArgoCD` `GitHub Actions` `Prometheus` `ELK Stack` `KEDA` `Nexus` `Python(Boto3)` `Slack API` `Node.js`
 
 ---
